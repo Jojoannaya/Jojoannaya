@@ -1,0 +1,78 @@
+-- analyzing business patterns and seasonality
+
+-- analyzing seasonnality by month and week
+select 
+year(website_sessions.created_at) as yr,
+month(website_sessions.created_at) as mo,
+count(website_sessions.website_session_id) as sessions,
+count(orders.website_session_id) as orders,
+count(orders.website_session_id)/ count(website_sessions.website_session_id) as session_to_order_pct
+from website_sessions
+left join orders
+on website_sessions.website_session_id = orders.website_session_id
+where website_sessions.created_at < '2013-01-01'
+group by 1,2;
+
+select 
+min(date(website_sessions.created_at)) as week_start_date,
+count(website_sessions.website_session_id) as sessions,
+count(orders.website_session_id) as orders,
+count(orders.website_session_id)/ count(website_sessions.website_session_id) as session_to_order_pct
+from website_sessions
+left join orders
+on website_sessions.website_session_id = orders.website_session_id
+where website_sessions.created_at < '2013-01-01'
+group by week(website_sessions.created_at);
+
+-- analyzing business pattern
+select
+hour(created_at) as hr,
+count(case when weekdays = 'monday' then website_session_id else null end) as mon,
+count(case when weekdays = 'tuesday' then website_session_id else null end) as tue,
+count(case when weekdays = 'wednesday' then website_session_id else null end) as wed,
+count(case when weekdays = 'thursday' then website_session_id else null end) as thu,
+count(case when weekdays = 'friday' then website_session_id else null end) as fri,
+count(case when weekdays = 'saturday' then website_session_id else null end) as sat,
+count(case when weekdays = 'sunday' then website_session_id else null end) as sun
+from(
+select
+website_session_id,
+created_at,
+case when weekday(created_at) = 0 then 'monday' 
+when weekday(created_at) = 1 then 'tuesday' 
+when weekday(created_at) = 2 then 'wednesday' 
+when weekday(created_at) = 3 then 'thursday' 
+when weekday(created_at) = 4 then 'friday' 
+when weekday(created_at) = 5 then 'saturday'
+when weekday(created_at) = 6 then 'sunday'
+else null end as weekdays
+from website_sessions
+where created_at < '2012-11-15'
+and created_at >'2012-09-15'
+) as seesion_w_weekday
+group by 1
+order by 1;
+
+
+
+-- avg session of this month by hour and weekday
+select 
+hr,
+round(avg(website_sessions),1) as avg_sessions,
+round(avg(case when wkday = 0 then website_sessions else null end),1) as mon,
+round(avg(case when wkday = 1 then website_sessions else null end),1) as tue,
+round(avg(case when wkday = 2 then website_sessions else null end),1) as wed,
+round(avg(case when wkday = 3 then website_sessions else null end),1) as thu,
+round(avg(case when wkday = 4 then website_sessions else null end),1) as fri,
+round(avg(case when wkday = 5 then website_sessions else null end),1) as sat,
+round(avg(case when wkday = 6 then website_sessions else null end),1) as sun
+from(select 
+date(created_at) as created_date,
+weekday(created_at) as wkday,
+hour(created_at) as hr,
+count(distinct website_session_id) as website_sessions
+from website_sessions
+where created_at between '2012-09-15' and '2012-11-15'
+group by 1,2,3) as daily_hourly_sessions
+group by 1
+order by 1
