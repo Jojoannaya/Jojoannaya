@@ -19,6 +19,7 @@ group by 1,2;
 
 /* 
 2. Monthly trend for Gsearch, slitting out gseach's nonbrand campaigns separate to see if brand is picking up at all. */
+
 select
   year(website_sessions.created_at) as yr,
   month(website_sessions.created_at) as mo,
