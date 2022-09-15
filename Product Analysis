@@ -102,3 +102,91 @@ group by 1;
 
 
 /* each product's full conversion funnel */
+
+/* each product's full conversion funnel */
+-- step 1. select all pageviews for relevant sessions
+-- step 2: figure out which pageview urls to look for
+-- step 3: pull all pageviews and identify the funnel step
+-- step 4: create the session-level conversion funnel view
+-- step 5: aggregaye the data to assess funnel performance
+
+-- step 1. select all pageviews for relevant sessions
+create temporary table session_seeing_product_pages
+select 
+website_session_id,
+website_pageview_id,
+pageview_url as product_page_seen
+from website_pageviews
+where created_at < '2013-04-10'
+and created_at > '2013-01-06'
+and pageview_url in ('/the-original-mr-fuzzy','/the-forever-love-bear');
+
+-- step 2: figure out which pageview urls to look for
+select distinct
+website_pageviews.pageview_url
+from session_seeing_product_pages
+left join website_pageviews
+on session_seeing_product_pages.website_session_id = website_pageviews.website_session_id
+and website_pageviews.website_pageview_id > session_seeing_product_pages.website_pageview_id;
+
+-- step 3: pull all pageviews and identify the funnel step
+-- use binary to flag the attribute from the column that we want
+-- flag with number so that it is easy to do calculation
+create temporary table session_product_leve_made_it_flags
+select 
+website_session_id,
+case when product_page_seen = '/the-original-mr-fuzzy' then 'mrfuzzy'
+when product_page_seen = '/the-forever-love-bear' then 'lovebear'
+else 'check logic' end
+as product_seen,
+max(cart_page) as cart_made_it,
+max(shipping_page) as shipping_made_it,
+max(billing_page) as billing_made_it,
+max(thankyou_page) as thankyou_made_it
+from(
+select
+session_seeing_product_pages.website_session_id,
+session_seeing_product_pages.website_pageview_id,
+session_seeing_product_pages.product_page_seen,
+case when pageview_url = '/cart' then 1  else 0 end as cart_page,
+case when pageview_url = '/shipping' then 1  else 0 end as shipping_page,
+case when pageview_url = '/billing-2' then 1  else 0 end as billing_page,
+case when pageview_url = '/thank-you-for-your-order' then 1  else 0 end as thankyou_page
+from session_seeing_product_pages
+left join website_pageviews
+on session_seeing_product_pages.website_session_id = website_pageviews.website_session_id
+and website_pageviews.website_pageview_id > session_seeing_product_pages.website_pageview_id
+) as pageview_level
+group by 
+website_session_id,
+case when product_page_seen = '/the-original-mr-fuzzy' then 'mrfuzzy'
+when product_page_seen = '/the-forever-love-bear' then 'lovebear'
+else 'check logic' end;
+
+-- step 5: aggregaye the data to assess funnel performance
+select 
+product_seen,
+count(distinct website_session_id) as sessions,
+count(distinct case when cart_made_it = 1 then website_session_id else null end) as to_cart,
+count(distinct case when shipping_made_it = 1 then website_session_id else null end) as to_shipping,
+count(distinct case when billing_made_it = 1 then website_session_id else null end) as to_billing,
+count(distinct case when thankyou_made_it = 1 then website_session_id else null end) as to_thankyou
+from session_product_leve_made_it_flags
+group by 1;
+
+select 
+product_seen,
+count(distinct case when cart_made_it = 1 then website_session_id else null end) / 
+count(distinct website_session_id) as product_page_click_rt,
+
+count(distinct case when shipping_made_it = 1 then website_session_id else null end) / 
+count(distinct case when cart_made_it = 1 then website_session_id else null end) as cart_click_rt,
+
+count(distinct case when shipping_made_it = 1 then website_session_id else null end)/
+count(distinct case when billing_made_it = 1 then website_session_id else null end)  as shipping_click_rt,
+
+count(distinct case when thankyou_made_it = 1 then website_session_id else null end) /
+count(distinct case when billing_made_it = 1 then website_session_id else null end) as thankyou_click_rt
+
+from session_product_leve_made_it_flags
+group by 1;
