@@ -1,0 +1,104 @@
+-- product launch sales analysis
+ 
+ use mavenfuzzyfactory;
+ 
+ -- product 1 order volume per month, total revenue per month, total margin
+ select 
+ year(created_at) as yr,
+ month(created_at) as mo,
+ count(distinct order_id) as number_of_sales,
+ sum(price_usd) as total_revenue,
+ sum(price_usd - cogs_usd) as total_margin
+ from orders
+ where created_at < '2013-01-04'
+ group by 1,2;
+ 
+ /* product 2 monthly order volume, overall conversion rates from website sessions to orders, 
+ revenue per session, and breakdown sales by product
+ count pivot table method to change a column to row (attibute) */
+  select
+  year(website_sessions.created_at) as yr,
+  month(website_sessions.created_at) as mo,
+  count(distinct website_sessions.website_session_id) as sessions,
+  count(distinct orders.order_id) as orders,
+  count(distinct orders.order_id) / count(distinct website_sessions.website_session_id) as conv_rate,
+  sum(orders.price_usd) / count(distinct website_sessions.website_session_id) as revenue_per_session,
+  count(distinct case when primary_product_id = 1 then order_id else null end) as product_one_order,
+  count(distinct case when primary_product_id = 2 then order_id else null end) as product_two_order
+  from website_sessions
+  left join orders
+  on website_sessions.website_session_id = orders.website_session_id
+  where website_sessions.created_at < '2013-04-01'
+  and website_sessions.created_at > '2012-04-01'
+  group by 1,2;
+  -- has adding product 2 helped? what are the metrics can tell if the product 2 is beneficial to the business?
+  -- the growth is due to the new product launch or just a continuation of overall business improvements?
+  -- the relationship between the variables
+  
+  /* product level website analysis */
+   -- user path and conversion funnel of product two
+   -- need to compare with the period when product two has'n been launched to see how p2 impacts
+   -- whether adding the product 2 help increase the overall conversion rate and whether procust 2 impact the product 1's conversion rate
+   
+   -- step 1. find the relevant products pageviews with website_session_id
+   -- step 2. find the next pageview id that occurs after the product pageview
+   -- step 3. find the pageview_url associated with any applicable next pageview
+   -- step 4. summarize the data and analyze the pre vs post periods
+   
+-- step 1: finding the product pageview
+drop table product_pageviews;
+create temporary table product_pageviews
+select
+website_session_id,
+website_pageview_id,
+created_at,
+case when created_at < '2013-01-06' then 'A. Pre_Product_2'
+when created_at >= '2013-01-06' then 'B. Post_Product_2'
+else 'check logic'
+end as time_period
+from website_pageviews
+where created_at < '2013-04-06'
+and created_at > '2012-10-06'
+and pageview_url = '/products';
+
+-- step 2: find the next pageview id that occurs after the product pageview
+create temporary table sessions_w_next_pageview_id
+select
+product_pageviews.time_period,
+product_pageviews.website_session_id,
+min(website_pageviews.website_pageview_id) as min_next_pageview_id
+from product_pageviews
+left join website_pageviews 
+on product_pageviews.website_session_id = website_pageviews.website_session_id
+and website_pageviews.website_pageview_id > product_pageviews.website_pageview_id
+group by 1,2;
+
+-- step 3. find the pageview_url associated with any applicable next pageview
+drop table sessions_w_next_pageview_url;
+create temporary table sessions_w_next_pageview_url
+select 
+sessions_w_next_pageview_id.time_period,
+sessions_w_next_pageview_id.website_session_id,
+website_pageviews.pageview_url as next_pageview_url
+from sessions_w_next_pageview_id
+left join website_pageviews
+on sessions_w_next_pageview_id.min_next_pageview_id = website_pageviews.website_pageview_id;
+
+-- step 4. summarize the data and analyze the pre vs post periods
+select
+time_period,
+count(distinct website_session_id) as sessions,
+count(distinct case when next_pageview_url is not null then website_session_id else null end) as with_next_page,
+count(distinct case when next_pageview_url is not null then website_session_id else null end)/
+count(distinct website_session_id) as pct_with_next_view,
+count(distinct case when next_pageview_url = '/the-original-mr-fuzzy' then website_session_id else null end) as to_mrfuzzy,
+count(distinct case when next_pageview_url = '/the-original-mr-fuzzy' then website_session_id else null end) /
+count(distinct website_session_id) as pct_to_mrfuzzy,
+count(distinct case when next_pageview_url = '/the-forever-love-bear' then website_session_id else null end) as to_lovebear,
+count(distinct case when next_pageview_url = '/the-forever-love-bear' then website_session_id else null end)/
+count(distinct website_session_id) as pct_to_lovebear
+from sessions_w_next_pageview_url
+group by 1;
+
+
+/* each product's full conversion funnel */
