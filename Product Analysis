@@ -1,6 +1,5 @@
 -- product launch sales analysis
  
- use mavenfuzzyfactory;
  
  -- product 1 order volume per month, total revenue per month, total margin
  select 
